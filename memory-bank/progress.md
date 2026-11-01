@@ -29,8 +29,8 @@
   - Dynamic imports con estrategia de precarga: Lazy-loading simple es suficiente para metricas
 
 ### Commits vinculados
-- 1cb1d8d: Accesibilidad inicial (aria-labels, titles)
-- 0adfc3f: Lazy-loading con React.lazy + Suspense
+- 1cb1d8d: chore(skills), instalación de accessibility y vercel-react-best-practices
+- 0adfc3f: fix(a11y), 8 archivos (WCAG 2.2)
 - fc995be: perf (React.lazy + Suspense en los gráficos, Intl reutilizado, meta description)
 
 ---
