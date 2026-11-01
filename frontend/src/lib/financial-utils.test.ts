@@ -106,6 +106,10 @@ describe("computeMonthlyData", () => {
 describe("formatters", () => {
   it("formats currency without decimals", () => {
     expect(formatCurrency(1234.56)).toBe("$1,235");
+    expect(formatCurrency(-1234.56)).toBe("-$1,235");
+    expect(formatCurrency(0)).toBe("$0");
+    expect(formatCurrency(-0)).toBe("-$0");
+    expect(formatCurrency(1234.56)).toBe("$1,235");
   });
 
   it("formats percent with one decimal", () => {
