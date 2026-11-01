@@ -76,7 +76,7 @@ export function IncomeOutcomeChart({ data, loading }: IncomeOutcomeChartProps) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <LineChart accessibilityLayer aria-label="Income vs. Outcome" data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" strokeOpacity={0.6} />
               <XAxis
                 dataKey="month"
@@ -101,6 +101,7 @@ export function IncomeOutcomeChart({ data, loading }: IncomeOutcomeChartProps) {
                 type="monotone"
                 dataKey="income"
                 name="income"
+                isAnimationActive={false}
                 stroke="var(--chart-income)"
                 strokeWidth={2}
                 dot={{ r: 3, fill: 'var(--chart-income)', strokeWidth: 0 }}
@@ -110,7 +111,9 @@ export function IncomeOutcomeChart({ data, loading }: IncomeOutcomeChartProps) {
                 type="monotone"
                 dataKey="outcome"
                 name="outcome"
+                isAnimationActive={false}
                 stroke="var(--chart-outcome)"
+                strokeDasharray="5 3"
                 strokeWidth={2}
                 dot={{ r: 3, fill: 'var(--chart-outcome)', strokeWidth: 0 }}
                 activeDot={{ r: 5, strokeWidth: 0 }}
@@ -118,6 +121,27 @@ export function IncomeOutcomeChart({ data, loading }: IncomeOutcomeChartProps) {
             </LineChart>
           </ResponsiveContainer>
         )}
+        {hasData ? (
+          <table className="sr-only">
+            <caption>Income vs. Outcome</caption>
+            <thead>
+              <tr>
+                <th scope="col">Month</th>
+                <th scope="col">Income</th>
+                <th scope="col">Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((point) => (
+                <tr key={point.month}>
+                  <th scope="row">{point.month}</th>
+                  <td>{formatCurrency(point.income)}</td>
+                  <td>{formatCurrency(point.outcome)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
       </CardContent>
     </Card>
   )
