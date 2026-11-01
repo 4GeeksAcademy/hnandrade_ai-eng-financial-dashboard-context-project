@@ -90,6 +90,8 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | `/api/metrics/alerts?start_date=1900-01-01&end_date=1900-01-31` | 200; array vacío. |
 | `/api/metrics/alerts?threshold=0&start_date=2025-11-01&end_date=2026-01-31` | 200; una alerta: `2025-12`, `outcome_total=103378.98`, `baseline_average=41404.44`, `increase_ratio=1.4968`. La respuesta de alertas no contiene filas para cada periodo sin alerta; no prueba el valor de la media en periodos iniciales sin historial. |
 | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0' \| jq '{total:length,first_six:[.[:6][] \| {period,baseline_average,increase_ratio}]}'` | 6 alertas en total; las seis filas devueltas tienen `baseline_average` numérico. Periodos y pares baseline/ratio: `2025-12` 41404.44/1.4968; `2026-03` 55334.29/0.5917; `2026-06` 57416.5/0.397; `2026-07` 60265.93/0.0039; `2026-08` 60291.89/0.3632; `2026-09` 62481.64/0.2223. La primera fila alertada es diciembre; no se devuelven filas de todos los meses. |
+| `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0'` filtrado a `period=2026-03` | Sin filtro de fecha, `2026-03` tiene `baseline_average=55334.29`. |
+| `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0&start_date=2026-01-01'` | Con inicio `2026-01-01`, `2026-03` tiene `baseline_average=38276.88` y `2025-12` desaparece. |
 | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0&start_date=2026-08-01' \| jq '{total:length,alerts:[.[] \| {period,baseline_average,increase_ratio}]}'` | 0 alertas; no hay baseline con el que comparar el valor de agosto de la consulta global. |
 
 ### Top categories
@@ -115,7 +117,7 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | --- | --- | --- |
 | Dos fechas opcionales para filtrar los datos del dashboard | Los nombres reales son `start_date` y `end_date`. Metrics, alerts, top categories y summary aceptan ambos; facets no recibe filtros y entrega el rango global. | Usar esos nombres en todos los requests aplicables; mantener facets como rango global disponible. No presentar el rango global como rango ya filtrado. |
 | Umbral configurable 0.01–1.0, defecto 0.3 | El defecto 0.3 coincide; API declara mínimo 0 y ningún máximo. `0` y `1.5` respondieron 200; `abc` respondió 422. | Si la UI debe limitar 0.01–1.0, validar ese rango en el control; no atribuirlo a la API. |
-| Media móvil de los tres periodos previos | Las seis alertas con `threshold=0` tienen baseline numérico; la primera fila alertada es diciembre. El request desde agosto devuelve `[]`, por lo que no permite comparar el baseline de agosto. OpenAPI y las respuestas no definen la ventana ni el valor de meses sin alerta. | Mantener ❓ sobre ventana y baseline cuando falta historial; confirmar contrato/semántica antes de etiquetar la columna como media de tres periodos. |
+| Media móvil de los tres periodos previos | `baseline_average` cambia para `2026-03` de `55334.29` a `38276.88` cuando se añade `start_date=2026-01-01`; `2025-12` desaparece. El promedio se calcula usando períodos dentro del rango filtrado. No se sabe cuántos períodos usa cuando hay menos de tres. | Limitar el promedio al rango activo; conservar ❓ solo sobre cuántos períodos previos usa cuando hay menos de tres disponibles. |
 | Estado vacío explícito de alertas | Sin registros o sin resultados se devuelve `[]` con HTTP 200. | Mostrar estado vacío en UI cuando la lista sea vacía; no tratarlo como error HTTP. |
 | Categorías B2B/B2C salen de facets | Facets da listas globales de `business_types` y `categories`; el filtro de grupo está en `business_type` de `categories/top`. | Pedir el top por separado con `business_type=B2B` y `business_type=B2C`; facets aporta valores disponibles, no tops por grupo. |
 | Top-5 de ingresos con nombre, total y porcentaje del grupo | Para ingreso la llamada real devolvió `category` y `total_amount`, sin porcentaje ni total de grupo. `limit=5` acepta máximo 20; las respuestas observadas contenían dos categorías de ingreso por grupo. | Calcular el porcentaje en frontend solo después de acordar el denominador. Sumar los elementos devueltos puede servir si el top cubre todas las categorías del grupo; la API no declara expresamente ese total como denominador. |
@@ -141,7 +143,7 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | 5 | La API restringe threshold a 0.01–1.0. | ❌ | OpenAPI declara mínimo 0 y sin máximo; curl con `threshold=0` y `threshold=1.5` respondió 200. |
 | 6 | `threshold=abc` causa error de validación 422. | ✅ | `curl` a `/api/metrics/alerts?threshold=abc`; `float_parsing` en `query.threshold`. |
 | 7 | Alerts devuelve `[]` para el rango sin datos consultado. | ✅ | `curl` a `/api/metrics/alerts?start_date=1900-01-01&end_date=1900-01-31`; HTTP 200. |
-| 8 | La media de alerts usa exactamente los tres periodos anteriores y tiene un valor definido antes de contar con esos periodos. | ❓ | OpenAPI solo nombra `baseline_average`; la consulta del tramo inicial no devuelve filas para todos los periodos ni define el cálculo. |
+| 8 | `baseline_average` usa exactamente los tres períodos previos cuando están disponibles. | ❓ | OpenAPI nombra el campo, pero no especifica cuántos períodos forman el promedio. |
 | 9 | `categories/top` separa los grupos con `business_type=B2B\|B2C`; facets enumera ambos. | ✅ | OpenAPI y las dos llamadas reales con `business_type=B2B` y `business_type=B2C`. |
 | 10 | El schema de `TopCategoryItem` incluye el porcentaje del grupo. | ❌ | OpenAPI solo define `category`, `operation_type` y `total_amount`; las respuestas reales no incluyen porcentaje. |
 | 11 | La fecha inválida `2025-13-45` causa 422 en `categories/top`. | ✅ | Llamada real; `date_from_datetime_parsing` en `query.start_date`. |
@@ -150,11 +152,16 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | 14 | `/api/metrics/summary` permite fechas y `business_type`, y devuelve `income`/`outcome` por periodo. | ✅ | OpenAPI inspeccionado con curl+jq; la ruta no se llamó en vivo. |
 | 15 | Las citas de fetch, tipos y Recharts del frontend coinciden con el código actual. | ✅ | `grep -n` sobre `frontend/src/App.tsx`, `frontend/src/lib/financial-types.ts`, `frontend/package.json` y ambos componentes de gráfico. |
 | 16 | Con threshold 0 hay seis alertas; en las seis respuestas listadas `baseline_average` es numérico y la primera fila alertada es diciembre de 2025. | ✅ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0'` proyectado con jq; evidencia en B. |
-| 17 | El baseline de agosto cambia al iniciar el rango en agosto, y el baseline utiliza solo el rango filtrado. | ❓ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0&start_date=2026-08-01'` devolvió `[]`; no permite comparar valores. |
+| 17 | `baseline_average` de `2026-03` cambia de `55334.29` a `38276.88` con `start_date=2026-01-01`, y `2025-12` desaparece; el promedio usa solo períodos dentro del rango. | ✅ | Dos llamadas curl con `threshold=0`: sin fechas y con `start_date=2026-01-01`; evidencia detallada en B. |
 | 18 | El máximo de limit es 20; limit=20 devuelve dos categorías de ingreso para cada grupo, con las sumas reportadas. | ✅ | OpenAPI para el máximo; dos llamadas curl a `categories/top` con `business_type=B2B` y `business_type=B2C`, proyectadas con jq. |
 | 19 | `/api/metrics` con solo `start_date=2026-01-01` devuelve 200 y 300 filas. | ✅ | Llamada curl real con status y conteo jq. |
 | 20 | `/api/metrics` con `start_date=2026-03-31` y `end_date=2026-01-01` devuelve 200 y cero filas. | ✅ | Llamada curl real con status y conteo jq. |
 | 21 | La respuesta de alerts omite períodos sin alertas; su primer elemento es `2025-12` con `baseline_average=41404.44`, numérico (no null ni cero). | ✅ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0'` devolvió seis elementos en los períodos listados en B; no incluye una fila por cada mes del rango disponible. |
+| 22 | Facets expone categorías y grupos como listas separadas; `categories/top` recibe `business_type` para filtrar categorías por grupo. | ✅ | Schemas de OpenAPI resumidos en A; llamadas B2B/B2C de B. |
+| 23 | No hay dependencia de router declarada; D5 especifica selector por estado sin nuevas dependencias. | ✅ | `frontend/package.json` revisado; D5. |
+| 24 | El dashboard y la comparación tienen estado de fechas independiente y comparten `DateRangeFilterBar`. | ✅ | Decisión de spec solicitada en D6. |
+| 25 | No se ha verificado cuántos períodos previos usa `baseline_average` cuando hay menos de tres disponibles. | ❓ | La alerta `2025-12` tiene baseline `41404.44` con un mes previo disponible; la regla no se probó. |
+| 26 | Se ha verificado cómo se muestra la comparación cuando falla una de las dos peticiones de categorías. | ❓ | No hay un curl de fallo parcial en B; el componente define el mensaje de UI, pero ese escenario no se probó. |
 
 ## F. Decisiones de spec
 
@@ -165,3 +172,9 @@ D2. Fechas: inputs opcionales YYYY-MM-DD. Una sola fecha rellena → se envía s
 D3. Porcentaje B2B/B2C (la API no lo devuelve): el frontend pide categories/top con limit = máximo permitido por OpenAPI (parte A.3) y business_type=B2B|B2C (una petición por grupo), muestra las 5 primeras y calcula porcentaje = total_amount / suma de total_amount de TODAS las categorías devueltas del grupo. El gráfico compara esas dos sumas (dos puntos de datos: B2B y B2C). Si un grupo tuviera más categorías que el máximo, documentarlo como ❓.
 
 Con limit=20, las llamadas reales devolvieron dos categorías por grupo. OpenAPI enumera cinco categorías globales; no se observó un grupo con más categorías que el máximo.
+
+D4. FacetsResponse.categories es una lista global, sin separar B2B y B2C (desajuste con el brief). La vista B2B vs B2C usa facets.business_types para decidir los paneles (uno por valor), facets.min_date y facets.max_date para el rango, y categories/top con business_type para las categorías de cada panel. facets.categories solo sirve como lista de nombres conocidos.
+
+D5. Navegación: revisa package.json. Si no hay router, un selector de vistas por estado, sin dependencias nuevas (ViewSwitcher, vistas "dashboard" | "comparison"). Si lo hay, ruta /comparison.
+
+D6. Fechas: el dashboard principal tiene su propio estado de fechas (F1, y F2 lo recibe por props). La vista B2B vs B2C tiene su propio estado independiente. Ambos usan el mismo componente DateRangeFilterBar.

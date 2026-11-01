@@ -32,7 +32,7 @@ export interface AlertEntry {
   period: string;
   /** Outcome amount for this period; OpenAPI declares a number without bounds. */
   outcome_total: number;
-  /** Numeric API baseline; no bounds are declared and the calculation window is unconfirmed. */
+  /** Average outcome of the previous periods inside the requested date range (verified: it changes when start_date changes); how many periods are used when fewer than three exist is unconfirmed. */
   baseline_average: number;
   /** Numeric relative increase ratio; OpenAPI declares no bounds. */
   increase_ratio: number;
