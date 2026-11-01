@@ -1,5 +1,5 @@
 # Stack técnico
-**Última verificación:** 2026-10-31, sobre el commit 295fd8c.
+**Última verificación:** 2026-11-01, sobre el commit e84dcc0.
 
 ## Tecnologías
 - Frontend: React 19, TypeScript, Vite 8, Tailwind 4, Recharts; pruebas con Vitest.
@@ -12,7 +12,7 @@
 ## Comandos (siempre dentro del contenedor)
 - `docker compose up -d` levanta los dos servicios. Si `docker compose ps` sale vacío, están parados.
 - Backend: `docker compose exec -T backend python -m pytest -q` (15 passed, 1 warning).
-- Frontend: `docker compose exec -T frontend npm run lint` (exit 0) y `docker compose exec -T frontend npm run test` (5 passed).
+- Frontend: `docker compose exec -T frontend npm run lint` (exit 0), `docker compose exec -T frontend npm run test` (5 passed), `npm run build` (en copia temporal sin node_modules) (exit 0, 0 warnings, chunk index 188 kB con gráficos en chunks lazy).
 - El Python del Codespace no tiene `fastapi`: pytest fuera del contenedor falla.
 - `./backend` y `./frontend` están montados en los contenedores (`docker-compose.yml`), así que los cambios se ven sin reconstruir.
 
