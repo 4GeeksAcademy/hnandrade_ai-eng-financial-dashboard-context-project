@@ -42,7 +42,7 @@ Sin parámetros. 200: objeto `MetricsFacets`, todos los campos requeridos y no n
 
 200: array de `MetricsAlert`; campos requeridos y no nullable: `period` (string), `outcome_total`, `baseline_average` e `increase_ratio` (number). 422: `HTTPValidationError`. OpenAPI no define que `baseline_average` sea específicamente la media de los tres periodos anteriores.
 
-### `GET /api/metrics/categories/top`
+### A.3 `GET /api/metrics/categories/top`
 
 | Query | Tipo / requerido | Restricciones y valor por defecto |
 | --- | --- | --- |
@@ -69,6 +69,8 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | --- | --- |
 | `curl -fsS http://localhost:8000/api/metrics \| jq '{count:length,first:.[0],last:.[-1]}'` | 360; primera fecha `2025-11-01`; última `2026-10-28`. |
 | `curl -sS -w '\n%{http_code}' 'http://localhost:8000/api/metrics?start_date=2026-01-01&end_date=2026-03-31'` | HTTP 200, 90 movimientos; extremos `2026-01-01` y `2026-03-24`. |
+| `curl -sS -w '\n%{http_code}' 'http://localhost:8000/api/metrics?start_date=2026-01-01'` | HTTP 200, 300 movimientos. |
+| `curl -sS -w '\n%{http_code}' 'http://localhost:8000/api/metrics?start_date=2026-03-31&end_date=2026-01-01'` | HTTP 200, 0 movimientos. |
 | `curl -fsS http://localhost:8000/api/metrics/facets \| jq .` | `min_date=2025-11-01`, `max_date=2026-10-28`; `business_types=[B2B,B2C]`; `operation_types=[income,outcome]`; cinco categorías: `administrative`, `operational`, `others`, `sales`, `suppliers`. |
 
 ### Alerts
@@ -87,6 +89,8 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | `/api/metrics/alerts?end_date=2026-03-31` | 200; 2 alertas, periodos extremos `2025-12` y `2026-03`. |
 | `/api/metrics/alerts?start_date=1900-01-01&end_date=1900-01-31` | 200; array vacío. |
 | `/api/metrics/alerts?threshold=0&start_date=2025-11-01&end_date=2026-01-31` | 200; una alerta: `2025-12`, `outcome_total=103378.98`, `baseline_average=41404.44`, `increase_ratio=1.4968`. La respuesta de alertas no contiene filas para cada periodo sin alerta; no prueba el valor de la media en periodos iniciales sin historial. |
+| `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0' \| jq '{total:length,first_six:[.[:6][] \| {period,baseline_average,increase_ratio}]}'` | 6 alertas en total; las seis filas devueltas tienen `baseline_average` numérico. Periodos y pares baseline/ratio: `2025-12` 41404.44/1.4968; `2026-03` 55334.29/0.5917; `2026-06` 57416.5/0.397; `2026-07` 60265.93/0.0039; `2026-08` 60291.89/0.3632; `2026-09` 62481.64/0.2223. La primera fila alertada es diciembre; no se devuelven filas de todos los meses. |
+| `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0&start_date=2026-08-01' \| jq '{total:length,alerts:[.[] \| {period,baseline_average,increase_ratio}]}'` | 0 alertas; no hay baseline con el que comparar el valor de agosto de la consulta global. |
 
 ### Top categories
 
@@ -102,6 +106,8 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | `/api/metrics/categories/top?operation_type=outcome&limit=5` | 200; 4 elementos: `others=224428.44`, `operational=196093.22`, `administrative=188143.37`, `suppliers=153467.23`. |
 | `/api/metrics/categories/top?operation_type=income&limit=5&business_type=B2B` | 200; 2 elementos: `sales=557903.97`, `others=57636.75`. |
 | `/api/metrics/categories/top?operation_type=income&limit=5&business_type=B2C` | 200; 2 elementos: `sales=574193.41`, `others=68412.74`. |
+| `curl -sS 'http://localhost:8000/api/metrics/categories/top?operation_type=income&limit=20&business_type=B2B' \| jq '{count:length,sum_total_amount:(map(.total_amount) \| add),categories:map(.category)}'` | 2 categorías: `sales`, `others`; suma `total_amount=615540.72`. |
+| `curl -sS 'http://localhost:8000/api/metrics/categories/top?operation_type=income&limit=20&business_type=B2C' \| jq '{count:length,sum_total_amount:(map(.total_amount) \| add),categories:map(.category)}'` | 2 categorías: `sales`, `others`; suma `total_amount=642606.15`. |
 
 ## C. Desajustes brief del PM vs API real
 
@@ -109,7 +115,7 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | --- | --- | --- |
 | Dos fechas opcionales para filtrar los datos del dashboard | Los nombres reales son `start_date` y `end_date`. Metrics, alerts, top categories y summary aceptan ambos; facets no recibe filtros y entrega el rango global. | Usar esos nombres en todos los requests aplicables; mantener facets como rango global disponible. No presentar el rango global como rango ya filtrado. |
 | Umbral configurable 0.01–1.0, defecto 0.3 | El defecto 0.3 coincide; API declara mínimo 0 y ningún máximo. `0` y `1.5` respondieron 200; `abc` respondió 422. | Si la UI debe limitar 0.01–1.0, validar ese rango en el control; no atribuirlo a la API. |
-| Media móvil de los tres periodos previos | La respuesta expone `baseline_average`; ni OpenAPI ni las respuestas examinadas definen la ventana. La consulta inicial solo devolvió una alerta de diciembre. | No fijar todavía “tres periodos” ni asignar valor a periodos iniciales. Confirmar contrato/semántica antes de etiquetar la columna como media de tres periodos. |
+| Media móvil de los tres periodos previos | Las seis alertas con `threshold=0` tienen baseline numérico; la primera fila alertada es diciembre. El request desde agosto devuelve `[]`, por lo que no permite comparar el baseline de agosto. OpenAPI y las respuestas no definen la ventana ni el valor de meses sin alerta. | Mantener ❓ sobre ventana y baseline cuando falta historial; confirmar contrato/semántica antes de etiquetar la columna como media de tres periodos. |
 | Estado vacío explícito de alertas | Sin registros o sin resultados se devuelve `[]` con HTTP 200. | Mostrar estado vacío en UI cuando la lista sea vacía; no tratarlo como error HTTP. |
 | Categorías B2B/B2C salen de facets | Facets da listas globales de `business_types` y `categories`; el filtro de grupo está en `business_type` de `categories/top`. | Pedir el top por separado con `business_type=B2B` y `business_type=B2C`; facets aporta valores disponibles, no tops por grupo. |
 | Top-5 de ingresos con nombre, total y porcentaje del grupo | Para ingreso la llamada real devolvió `category` y `total_amount`, sin porcentaje ni total de grupo. `limit=5` acepta máximo 20; las respuestas observadas contenían dos categorías de ingreso por grupo. | Calcular el porcentaje en frontend solo después de acordar el denominador. Sumar los elementos devueltos puede servir si el top cubre todas las categorías del grupo; la API no declara expresamente ese total como denominador. |
@@ -143,3 +149,19 @@ También se extrajeron `/api/metrics/summary`, `/api/metrics/comparison`, `/api/
 | 13 | `limit=0` y `limit=100` se rechazan con 422. | ✅ | Llamadas reales; errores `greater_than_equal` y `less_than_equal`. |
 | 14 | `/api/metrics/summary` permite fechas y `business_type`, y devuelve `income`/`outcome` por periodo. | ✅ | OpenAPI inspeccionado con curl+jq; la ruta no se llamó en vivo. |
 | 15 | Las citas de fetch, tipos y Recharts del frontend coinciden con el código actual. | ✅ | `grep -n` sobre `frontend/src/App.tsx`, `frontend/src/lib/financial-types.ts`, `frontend/package.json` y ambos componentes de gráfico. |
+| 16 | Con threshold 0 hay seis alertas; en las seis respuestas listadas `baseline_average` es numérico y la primera fila alertada es diciembre de 2025. | ✅ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0'` proyectado con jq; evidencia en B. |
+| 17 | El baseline de agosto cambia al iniciar el rango en agosto, y el baseline utiliza solo el rango filtrado. | ❓ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0&start_date=2026-08-01'` devolvió `[]`; no permite comparar valores. |
+| 18 | El máximo de limit es 20; limit=20 devuelve dos categorías de ingreso para cada grupo, con las sumas reportadas. | ✅ | OpenAPI para el máximo; dos llamadas curl a `categories/top` con `business_type=B2B` y `business_type=B2C`, proyectadas con jq. |
+| 19 | `/api/metrics` con solo `start_date=2026-01-01` devuelve 200 y 300 filas. | ✅ | Llamada curl real con status y conteo jq. |
+| 20 | `/api/metrics` con `start_date=2026-03-31` y `end_date=2026-01-01` devuelve 200 y cero filas. | ✅ | Llamada curl real con status y conteo jq. |
+| 21 | La respuesta de alerts omite períodos sin alertas; su primer elemento es `2025-12` con `baseline_average=41404.44`, numérico (no null ni cero). | ✅ | `curl -sS 'http://localhost:8000/api/metrics/alerts?threshold=0'` devolvió seis elementos en los períodos listados en B; no incluye una fila por cada mes del rango disponible. |
+
+## F. Decisiones de spec
+
+D1. threshold: input numérico min 0.01, max 1.0, paso 0.01, defecto 0.3. Vacío, no numérico o fuera de rango → NO se envía la petición, mensaje de validación junto al input y se conserva el último resultado válido (la API acepta cualquier número; la validación es del cliente).
+
+D2. Fechas: inputs opcionales YYYY-MM-DD. Una sola fecha rellena → se envía solo ese parámetro. Inicio > fin, o fecha fuera del rango de facets → no se envía y se muestra mensaje de validación. El rango de facets es la pista visible y los min/max de los inputs. Las fechas de los ejemplos de la spec son ilustrativas.
+
+D3. Porcentaje B2B/B2C (la API no lo devuelve): el frontend pide categories/top con limit = máximo permitido por OpenAPI (parte A.3) y business_type=B2B|B2C (una petición por grupo), muestra las 5 primeras y calcula porcentaje = total_amount / suma de total_amount de TODAS las categorías devueltas del grupo. El gráfico compara esas dos sumas (dos puntos de datos: B2B y B2C). Si un grupo tuviera más categorías que el máximo, documentarlo como ❓.
+
+Con limit=20, las llamadas reales devolvieron dos categorías por grupo. OpenAPI enumera cinco categorías globales; no se observó un grupo con más categorías que el máximo.
